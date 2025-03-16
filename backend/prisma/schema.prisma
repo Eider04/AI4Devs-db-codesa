@@ -11,47 +11,338 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url = "postgresql://admin:admin@localhost:5433/exampledb"
 }
 
+// Enums
+enum Status {
+  ACTIVE
+  INACTIVE
+  PENDING
+  DELETED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  TEMPORARY
+  INTERNSHIP
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  REVIEWING
+  INTERVIEWING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum InterviewResult {
+  PENDING
+  PASSED
+  FAILED
+  NO_SHOW
+  RESCHEDULED
+}
+
+// Base Models
+model Address {
+  id           Int        @id @default(autoincrement())
+  street       String     @db.VarChar(255)
+  city         String     @db.VarChar(100)
+  state        String     @db.VarChar(100)
+  country      String     @db.VarChar(100)
+  postalCode   String     @db.VarChar(20)
+  candidates   Candidate[]
+  companies    Company[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model ContactInfo {
+  id         Int        @id @default(autoincrement())
+  email      String     @unique @db.VarChar(255)
+  phone      String?    @db.VarChar(15)
+  linkedin   String?    @db.VarChar(255)
+  website    String?    @db.VarChar(255)
+  candidates Candidate[]
+  employees  Employee[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+// Main Models
 model Candidate {
-  id                Int               @id @default(autoincrement())
-  firstName         String            @db.VarChar(100)
-  lastName          String            @db.VarChar(100)
-  email             String            @unique @db.VarChar(255)
-  phone             String?           @db.VarChar(15)
-  address           String?           @db.VarChar(100)
-  educations        Education[]
-  workExperiences   WorkExperience[]
-  resumes           Resume[]
+  id              Int              @id @default(autoincrement())
+  firstName       String           @db.VarChar(100)
+  lastName        String           @db.VarChar(100)
+  addressId       Int?
+  contactInfoId   Int
+  status         Status           @default(ACTIVE)
+  address         Address?         @relation(fields: [addressId], references: [id])
+  contactInfo     ContactInfo      @relation(fields: [contactInfoId], references: [id])
+  educations      Education[]
+  workExperiences WorkExperience[]
+  skills          CandidateSkill[]
+  resumes         Resume[]
+  applications    Application[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([addressId])
+  @@index([contactInfoId])
 }
 
 model Education {
   id            Int       @id @default(autoincrement())
   institution   String    @db.VarChar(100)
-  title         String    @db.VarChar(250)
+  degree        String    @db.VarChar(100)
+  field         String    @db.VarChar(150)
   startDate     DateTime
   endDate       DateTime?
+  gpa          Decimal?  @db.Decimal(3,2)
   candidateId   Int
   candidate     Candidate @relation(fields: [candidateId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([candidateId])
 }
 
 model WorkExperience {
   id          Int       @id @default(autoincrement())
   company     String    @db.VarChar(100)
   position    String    @db.VarChar(100)
-  description String?   @db.VarChar(200)
+  description String?   @db.Text
   startDate   DateTime
   endDate     DateTime?
+  isCurrent   Boolean   @default(false)
   candidateId Int
   candidate   Candidate @relation(fields: [candidateId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([candidateId])
+}
+
+model Skill {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique @db.VarChar(100)
+  category        String           @db.VarChar(50)
+  candidates      CandidateSkill[]
+  positions       PositionSkill[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model CandidateSkill {
+  id          Int       @id @default(autoincrement())
+  candidateId Int
+  skillId     Int
+  level       Int       @db.SmallInt
+  yearsOfExp  Decimal?  @db.Decimal(4,1)
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+  skill       Skill     @relation(fields: [skillId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([candidateId, skillId])
+  @@index([skillId])
 }
 
 model Resume {
   id          Int       @id @default(autoincrement())
   filePath    String    @db.VarChar(500)
   fileType    String    @db.VarChar(50)
+  isActive    Boolean   @default(true)
   uploadDate  DateTime
   candidateId Int
   candidate   Candidate @relation(fields: [candidateId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([candidateId])
+}
+
+model Company {
+  id          Int        @id @default(autoincrement())
+  name        String     @db.VarChar(255)
+  addressId   Int?
+  status      Status     @default(ACTIVE)
+  address     Address?   @relation(fields: [addressId], references: [id])
+  industry    String?    @db.VarChar(100)
+  size        String?    @db.VarChar(50)
+  website     String?    @db.VarChar(255)
+  employees   Employee[]
+  positions   Position[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([addressId])
+}
+
+model Employee {
+  id           Int         @id @default(autoincrement())
+  companyId    Int
+  contactInfoId Int
+  name         String      @db.VarChar(255)
+  role         String      @db.VarChar(100)
+  isActive     Boolean     @default(true)
+  company      Company     @relation(fields: [companyId], references: [id])
+  contactInfo  ContactInfo @relation(fields: [contactInfoId], references: [id])
+  interviews   Interview[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([companyId])
+  @@index([contactInfoId])
+}
+
+model Position {
+  id                 Int            @id @default(autoincrement())
+  companyId          Int
+  interviewFlowId    Int
+  title              String         @db.VarChar(255)
+  description        String?        @db.Text
+  status             Status         @default(ACTIVE)
+  isVisible          Boolean        @default(true)
+  location           String?        @db.VarChar(255)
+  employmentType     EmploymentType @default(FULL_TIME)
+  salaryRange        SalaryRange?
+  requirements       Requirements?
+  benefits           Benefits?
+  skills             PositionSkill[]
+  applications       Application[]
+  company            Company        @relation(fields: [companyId], references: [id])
+  interviewFlow      InterviewFlow  @relation(fields: [interviewFlowId], references: [id])
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([companyId])
+  @@index([interviewFlowId])
+}
+
+model SalaryRange {
+  id         Int      @id @default(autoincrement())
+  positionId Int      @unique
+  minimum    Decimal  @db.Decimal(10,2)
+  maximum    Decimal  @db.Decimal(10,2)
+  currency   String   @db.VarChar(3)
+  position   Position @relation(fields: [positionId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Requirements {
+  id          Int      @id @default(autoincrement())
+  positionId  Int      @unique
+  education   String?  @db.Text
+  experience  String?  @db.Text
+  other       String?  @db.Text
+  position    Position @relation(fields: [positionId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Benefits {
+  id          Int      @id @default(autoincrement())
+  positionId  Int      @unique
+  insurance   String?  @db.Text
+  vacation    String?  @db.Text
+  retirement  String?  @db.Text
+  other       String?  @db.Text
+  position    Position @relation(fields: [positionId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PositionSkill {
+  id          Int      @id @default(autoincrement())
+  positionId  Int
+  skillId     Int
+  isRequired  Boolean  @default(true)
+  position    Position @relation(fields: [positionId], references: [id])
+  skill       Skill    @relation(fields: [skillId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([positionId, skillId])
+  @@index([skillId])
+}
+
+model InterviewFlow {
+  id           Int            @id @default(autoincrement())
+  name         String         @db.VarChar(100)
+  description  String?        @db.Text
+  positions    Position[]
+  steps        InterviewStep[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model InterviewType {
+  id          Int            @id @default(autoincrement())
+  name        String         @db.VarChar(100)
+  description String?        @db.Text
+  steps       InterviewStep[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model InterviewStep {
+  id              Int           @id @default(autoincrement())
+  interviewFlowId Int
+  interviewTypeId Int
+  name            String        @db.VarChar(100)
+  orderIndex      Int
+  duration        Int           @db.SmallInt  // duration in minutes
+  interviewFlow   InterviewFlow @relation(fields: [interviewFlowId], references: [id])
+  interviewType   InterviewType @relation(fields: [interviewTypeId], references: [id])
+  interviews      Interview[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([interviewFlowId])
+  @@index([interviewTypeId])
+}
+
+model Application {
+  id              Int              @id @default(autoincrement())
+  positionId      Int
+  candidateId     Int
+  applicationDate DateTime
+  status          ApplicationStatus @default(SUBMITTED)
+  notes           String?          @db.Text
+  position        Position         @relation(fields: [positionId], references: [id])
+  candidate       Candidate        @relation(fields: [candidateId], references: [id])
+  interviews      Interview[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([positionId])
+  @@index([candidateId])
+}
+
+model Interview {
+  id              Int            @id @default(autoincrement())
+  applicationId   Int
+  interviewStepId Int
+  employeeId      Int
+  scheduledDate   DateTime
+  actualDate      DateTime?
+  result          InterviewResult @default(PENDING)
+  score           Int?           @db.SmallInt
+  feedback        String?        @db.Text
+  notes           String?        @db.Text
+  application     Application    @relation(fields: [applicationId], references: [id])
+  interviewStep   InterviewStep  @relation(fields: [interviewStepId], references: [id])
+  employee        Employee       @relation(fields: [employeeId], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([applicationId])
+  @@index([interviewStepId])
+  @@index([employeeId])
 }
